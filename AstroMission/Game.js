@@ -18,6 +18,7 @@ const TASKS = [
   { id: "lifeSupport", name: "Life support", description: "Produces oxygen and water (uses power)" },
   { id: "greenhouse", name: "Greenhouse", description: "Produces food (uses power)" },
   { id: "science", name: "Science and exploration", description: "Earns points; uses power and health" },
+  { id: "maintenance", name: "Inspection and repairs", description: "Inspect systems (prevents -2 power/day)" },
   { id: "rest", name: "Rest and health", description: "Restores the crew's health" }
 ];
 
@@ -133,13 +134,13 @@ function osdrEvents() {
   return [
     make("osdrPlant", "Research: plants in space", "A botanist proposes repeating a plant-growth protocol from NASA's space biology archive in your greenhouse.",
       "NASA's Open Science Data Repository shares space-flight experiments so crews and scientists can reuse them.", o.lists.plant,
-      { label: "Run it in the greenhouse (1 crew member unavailable tomorrow)", effect: { lostCrew: 1, science: 10, food: 6 } }, { label: "Not now", effect: {} }),
+      { label: "Run it in the greenhouse (1 crew member unavailable tomorrow)", effect: { lostCrew: 1, science: 10, food: 6 } }, { label: "Not now", effect: { food: -5 } }),
     make("osdrRadiation", "Research: radiation and health", "The medical officer wants to apply findings on radiation effects from NASA's space biology archive.",
       "Space radiation and microgravity change the body's cells; OSDR studies help design protection for crews.", o.lists.radiation,
-      { label: "Apply the protocol to the crew (1 crew member unavailable tomorrow)", effect: { lostCrew: 1, health: 6, science: 6 } }, { label: "Skip it", effect: {} }),
+      { label: "Apply the protocol to the crew (1 crew member unavailable tomorrow)", effect: { lostCrew: 1, health: 6, science: 6 } }, { label: "Skip it", effect: { health: -5 } }),
     make("osdrMuscle", "Research: muscle and bone loss", "The crew doctor suggests an exercise routine based on a muscle and bone study from NASA's archive.",
       "Without gravity's full pull, muscles and bones weaken; exercise countermeasures are studied on the ISS and stored in OSDR.", o.lists.muscle,
-      { label: "Add the routine (1 crew member unavailable tomorrow)", effect: { lostCrew: 1, health: 8, science: 4 } }, { label: "Skip it", effect: {} })
+      { label: "Add the routine (1 crew member unavailable tomorrow)", effect: { lostCrew: 1, health: 8, science: 4 } }, { label: "Skip it", effect: { health: -5 } })
   ].filter(Boolean);
 }
 
@@ -256,12 +257,12 @@ let state = null, pendingEvent = null, eventSelectionPending = false;
 const availableCrew = () => Math.max(0, state.crew - state.lostCrew);
 const assignedCrew = () => Object.values(state.assignments).reduce((total, count) => total + count, 0);
 
-function fitAssignments() { while (assignedCrew() > availableCrew()) for (const task of ["rest", "science", "greenhouse", "lifeSupport", "power"]) if (state.assignments[task] > 0 && assignedCrew() > availableCrew()) state.assignments[task]--; }
+function fitAssignments() { while (assignedCrew() > availableCrew()) for (const task of ["rest", "science", "maintenance", "greenhouse", "lifeSupport", "power"]) if (state.assignments[task] > 0 && assignedCrew() > availableCrew()) state.assignments[task]--; }
 
 function startMission(siteId) {
   state = { siteId, day: 1, oxygen: 100, water: 100, food: 100, power: 100, health: 100, science: 0, crew: 4, lostCrew: 0,
-    assignments: { power: 1, lifeSupport: 1, greenhouse: 1, science: 1, rest: 0 },
-    history: { power: 0, lifeSupport: 0, greenhouse: 0, science: 0, rest: 0 },
+    assignments: { power: 1, lifeSupport: 1, greenhouse: 1, science: 1, maintenance: 0, rest: 0 },
+    history: { power: 0, lifeSupport: 0, greenhouse: 0, science: 0, maintenance: 0, rest: 0 },
     log: ["Arrival on " + SITES[siteId].name + ": 4 astronauts, 30-day mission."], gameOver: null, complete: false, nasa: { terrain: null, usedDonkiDates: [], donkiEvents: [] } };
   pendingEvent = null; eventSelectionPending = false; renderApp(); startNasaFeeds();
 }
@@ -277,7 +278,8 @@ function endDay() {
   const efficiency = state.power > 5 ? 1 : 0.3; // During a blackout, life support and the greenhouse nearly stop.
   const generatedPower = (6 + 10 * assignments.power) * sunlight;
   const usedPower = 10 + 3 * assignments.lifeSupport + 2 * assignments.greenhouse + 4 * assignments.science;
-  state.power = clamp(state.power + generatedPower - usedPower);
+  const maintenanceLoss = assignments.maintenance > 0 ? 0 : 2;
+  state.power = clamp(state.power + generatedPower - usedPower - maintenanceLoss);
   state.oxygen = clamp(state.oxygen + 6 * assignments.lifeSupport * efficiency - 6);
   state.water = clamp(state.water + 5 * assignments.lifeSupport * efficiency - 5);
   state.food = clamp(state.food + 4 * assignments.greenhouse * efficiency - 5);
@@ -286,7 +288,7 @@ function endDay() {
   if (state.water <= 0) healthChange -= 15;
   if (state.food <= 0) healthChange -= 10;
   state.health = clamp(state.health + healthChange, 0, 100);
-  state.log.unshift("Day " + state.day + ": power " + (generatedPower - usedPower >= 0 ? "+" : "") + Math.round(generatedPower - usedPower) + (efficiency < 1 ? " BLACKOUT!" : "") + ", O₂ " + formatDelta(6 * assignments.lifeSupport * efficiency - 6) + ", water " + formatDelta(5 * assignments.lifeSupport * efficiency - 5) + ", food " + formatDelta(4 * assignments.greenhouse * efficiency - 5) + ".");
+  state.log.unshift("Day " + state.day + ": power " + (generatedPower - usedPower - maintenanceLoss >= 0 ? "+" : "") + Math.round(generatedPower - usedPower - maintenanceLoss) + (maintenanceLoss ? " (no inspection)" : "") + (efficiency < 1 ? " BLACKOUT!" : "") + ", O₂ " + formatDelta(6 * assignments.lifeSupport * efficiency - 6) + ", water " + formatDelta(5 * assignments.lifeSupport * efficiency - 5) + ", food " + formatDelta(4 * assignments.greenhouse * efficiency - 5) + ".");
   state.lostCrew = 0; state.day++;
   if (state.day > DAYS) { state.complete = true; sfx.win(); return renderApp(); }
   if (checkMissionEnd()) { sfx.lose(); return renderApp(); }
