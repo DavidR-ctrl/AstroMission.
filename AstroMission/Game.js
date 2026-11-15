@@ -288,8 +288,8 @@ function endDay() {
   state.health = clamp(state.health + healthChange, 0, 100);
   state.log.unshift("Day " + state.day + ": power " + (generatedPower - usedPower >= 0 ? "+" : "") + Math.round(generatedPower - usedPower) + (efficiency < 1 ? " BLACKOUT!" : "") + ", O₂ " + formatDelta(6 * assignments.lifeSupport * efficiency - 6) + ", water " + formatDelta(5 * assignments.lifeSupport * efficiency - 5) + ", food " + formatDelta(4 * assignments.greenhouse * efficiency - 5) + ".");
   state.lostCrew = 0; state.day++;
-  if (checkMissionEnd()) { sfx.lose(); return renderApp(); }
   if (state.day > DAYS) { state.complete = true; sfx.win(); return renderApp(); }
+  if (checkMissionEnd()) { sfx.lose(); return renderApp(); }
   sfx.tick();
   if (state.day >= 2) {
     const current = state;
@@ -394,23 +394,25 @@ function renderApp() {
 
 function renderReport() {
   const missionWon = state.complete, totalAssignments = Object.values(state.history).reduce((total, count) => total + count, 0) || 1;
-  const score = state.science + Math.round(state.health / 2) + Math.round((state.oxygen + state.water + state.food + state.power) / 8);
-  const grade = !missionWon ? "—" : score >= 200 ? "S" : score >= 150 ? "A" : score >= 100 ? "B" : "C";
+  const daysSurvived = missionWon ? DAYS : Math.max(0, state.day - 1);
+  const supplies = state.oxygen + state.water + state.food + state.power;
+  const score = daysSurvived * 10 + Math.round(state.health * 2) + Math.round(supplies / 2.4) + Math.min(state.science, 150) + (missionWon ? 150 : 0);
+  const grade = score >= 850 ? "S" : score >= 700 ? "A" : score >= 550 ? "B" : "C";
   const donkiEvents = state.nasa.donkiEvents;
   $("#app").innerHTML = `<main class="end-screen ${missionWon ? "end-screen--victory" : "end-screen--gameover"}">
   <section class="end-hero">
     <p class="end-eyebrow">${missionWon ? "Mission complete" : "Mission failed · day " + (state.day - 1)}</p>
     <h1>${missionWon ? "Victory" : "Game Over"}</h1>
     <p>${missionWon ? "The crew survived all 30 days and completed the mission." : esc(state.gameOver)}</p>
-    <span class="tag">${missionWon ? "Grade " + grade : "Mission lost"}</span>
+    <span class="tag">${missionWon ? "Grade " + grade : "Mission lost · score " + score}</span>
   </section>
   <section class="panel end-panel"><span class="lbl">Mission summary</span>
     <p>${missionWon ? "Your crew made it home safely." : esc(state.gameOver)}</p>
     <div class="end-metrics">
-      <div><span>Days survived</span><b>${missionWon ? DAYS : Math.max(0, state.day - 1)} / ${DAYS}</b></div>
+      <div><span>Days survived</span><b>${daysSurvived} / ${DAYS}</b></div>
       <div><span>Science</span><b>${state.science} pts</b></div>
       <div><span>Final health</span><b>${Math.round(state.health)}%</b></div>
-      <div><span>Final score</span><b>${missionWon ? score : "—"}</b></div>
+      <div><span>Final score</span><b>${score}</b></div>
     </div>
   </section>
   <section class="panel end-panel"><span class="lbl">NASA DONKI sources</span>
