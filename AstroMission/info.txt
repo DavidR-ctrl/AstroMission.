@@ -1,0 +1,19 @@
+DATA SOURCES
+
+- NASA DONKI (space weather): https://ccmc.gsfc.nasa.gov/DONKI/api/
+- NASA OSDR (space biology): https://osdr.nasa.gov/osdr/data/search
+- Mars Trek / MOLA terrain: https://trek.nasa.gov/tiles/Mars/EQ/
+
+DONKI IN THE GAME
+
+- Events from the last two years are loaded.
+- Each mission day randomly selects a date with events and displays one real event from that date.
+- Dates are not repeated during a mission until all available dates have been used.
+- The event date and source link appear with the event.
+- Victory and game-over screens list the dates and NASA DONKI source links for events used during the mission.
+
+STARTUP
+
+- Double-click astromission.html to open the start screen in your browser.
+- Press any key on astromission.html to open the game page automatically.
+- Only astromission.html needs to be opened; the game and its other files load automatically.
